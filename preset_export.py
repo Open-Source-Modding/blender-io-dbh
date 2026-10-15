@@ -21,6 +21,14 @@ class PresetExport:
         self.fingerprints=fingerprints
         self.single_mip=single_mip
         self.donor=None;self.canonical={};self.pbr_donor=None;self.dither_donor=None;self.hair_donor=None
+        self._transfers=None
+
+    @property
+    def transfers(self):
+        if self._transfers is None:
+            from .material_transfer import MaterialTransfer
+            self._transfers=MaterialTransfer(self.package,self.metadata,self.resources,self.experimental,self.fingerprints,self.single_mip)
+        return self._transfers
 
     def template(self,pbr=False,dither=False,hair=False):
         cached=self.hair_donor if hair else self.dither_donor if dither else self.pbr_donor if pbr else self.donor
@@ -138,8 +146,9 @@ class PresetExport:
         if mode not in PRESETS:
             asset=mat.get('dbh_material_id')
             if asset is None:raise ValueError(f'{mat.name}: choose a Game Shader preset before export')
-            if asset!=0 and not any(r.kind==2133 and r.asset==asset for r in self.package.container.records):
-                raise ValueError(f'{mat.name}: material belongs to another package; choose a standard preset')
+            if asset:
+                copied=self.transfers.material(mat)
+                if copied is not None:return copied
             return asset,None
         cache=mat.as_pointer(),surface
         if cache in self.materials:return self.materials[cache]
@@ -254,6 +263,8 @@ class PresetExport:
         value=record.asset,None;self.materials[cache]=value;return value
 
     def append(self,md,sub,vertices,faces,asset,carrier):
+        from .material_transfer import NativeCarrier
+        if isinstance(carrier,NativeCarrier):return self.transfers.append(md,sub,vertices,faces,asset,carrier)
         if carrier is None:
             # Existing original shader reassignment is allowed only when its
             # source interface/detail metrics are known, not guessed.

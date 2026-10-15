@@ -86,12 +86,13 @@ def validate_texture(record,raw):
     return info
 
 
-def export_materials(package,objects,experimental=False,fingerprints=None,single_mip=False):
+def export_materials(package,objects,experimental=False,fingerprints=None,single_mip=False,skip_materials=()):
     from .material_ui import pixel_hash,pixel_hash_many
     from .preset_shader import PRESETS
     mats={}
     for obj in objects:
         for mat in obj.data.materials:
+            if mat and mat.as_pointer() in skip_materials:continue
             if mat and mat.dbh_shader_mode not in PRESETS and 'dbh_material_id' in mat and hasattr(mat,'dbh_texture_slots'):
                 mid=mat['dbh_material_id']
                 if mid in mats and mats[mid]!=mat:

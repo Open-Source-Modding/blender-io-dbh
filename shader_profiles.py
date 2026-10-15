@@ -169,8 +169,11 @@ def is_coat_rgb(record,raw):
     except ValueError:return False
 
 
-def export_shaders(package,objects,experimental):
+def export_shaders(package,objects,experimental,skip_materials=()):
     resources={};reports=[]
+    from types import SimpleNamespace
+    objects=[SimpleNamespace(data=SimpleNamespace(materials=[m for m in o.data.materials
+             if m is None or m.as_pointer() not in skip_materials])) for o in objects]
     from .eye_emission import build_shader as eye_shader,detect as is_eye
     eye_mats={m for o in objects for m in o.data.materials if m and m.get('dbh_material_id') is not None}
     for mat in eye_mats:

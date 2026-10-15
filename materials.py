@@ -53,6 +53,33 @@ def texture_info(record):
     return dict(format=fmt,width=w,height=h,depth=depth,mips=mips,dependencies=refs)
 
 
+def texture_dependency_offsets(record, require_match=True):
+    """Locate FILETEXT v24's second serialized copy of prefix dependencies.
+
+    These are typed fields, never a byte search. The native game consumes both
+    copies; remapping the prefix alone produces an invalid transferred texture.
+    require_match=False is reserved for explicit repair of verified bundles.
+    """
+    info=texture_info(record);deps=info['dependencies'];d=record.payload
+    if not deps:return []
+    if len(d)<129 or d[56] not in (1,2,3) or d[57]!=0:
+        raise ValueError('Unsupported FILETEXT dependency layout')
+    pos=128;flag=d[pos];pos+=1;lods=0
+    if flag==1:
+        if len(d)<pos+2:raise ValueError('Truncated FILETEXT LOD table')
+        lods=d[pos+1];pos+=2+7*lods
+    elif flag!=0:raise ValueError('Unknown FILETEXT LOD flag')
+    pos+=3+4*d[51]*(6 if d[56]==2 else 1)
+    if len(deps)!=max(1,lods) or pos+12*len(deps)+12!=len(d):
+        raise ValueError('FILETEXT dependency layout mismatch')
+    if d[pos+12*len(deps):]!=b'FTEXCRAW'+struct.pack('<I',1):
+        raise ValueError('Unsupported FILETEXT dependency suffix')
+    result=[pos+12*i for i in range(len(deps))]
+    if require_match and any(struct.unpack_from('<III',d,p)!=dep for p,dep in zip(result,deps)):
+        raise ValueError('FILETEXT prefix/payload references disagree')
+    return result
+
+
 class ArchiveTextures:
     """Read only the referenced texture resources; never writes installed files."""
     def __init__(self,index):

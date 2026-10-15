@@ -265,6 +265,10 @@ def _import_native(context, path, package, metadata, texture_loader):
             cloth_status = import_mask(obj, package, metadata, record.index, mi, cloth_index)
             mark('cloth')
             material=make_material(package, sub.material[1], metadata.get('texture_folders', []), materials)
+            if sub.material[1]:
+                material['dbh_material_source']=str(path)
+                material['dbh_material_source_sha256']=metadata['package_sha256']
+                material['dbh_material_source_index']=metadata.get('game_index','')
             if hasattr(material,'dbh_texture_slots'):populate(material,package,texture_loader)
             settings=metadata.get('material_previews',{}).get(f'{sub.material[1]:X}')
             if settings and not material.get('dbh_preview_restored'):
@@ -707,7 +711,9 @@ def _export_file(context,destination,bone_skin_cloth,experimental_textures,embed
                     mat=obj.data.materials[material_index] if material_index<len(obj.data.materials) else None
                     plan[material_index]=presets.material(mat,(ri,mi,material_index))
                 asset,carrier=plan[material_index]
-                if native_attachment and carrier is not None:
+                from .material_transfer import NativeCarrier
+                static_carrier=isinstance(carrier,NativeCarrier) and not carrier.skinned
+                if native_attachment and carrier is not None and not static_carrier:
                     raise ValueError(f'{obj.name}: new skinned shader carriers cannot be combined with a static native NODE attachment')
                 selected=[f for f,i in zip(faces,face_materials) if i==material_index]
                 draws.extend(presets.append(md,sub,v,f,asset,carrier) for v,f in split_mesh(vertices,selected))
@@ -737,9 +743,10 @@ def _export_file(context,destination,bone_skin_cloth,experimental_textures,embed
         from .cloth_route import route
         cloth_report.extend(route(package,meshes,cloth_requests,metadata))
     from .texture_export import export_materials, validate_texture
-    texture_resources,texture_report=export_materials(package,objects,experimental_textures,fingerprints.finish(),single_mip)
+    transferred=set(presets.transfers.materials)
+    texture_resources,texture_report=export_materials(package,objects,experimental_textures,fingerprints.finish(),single_mip,transferred)
     from .shader_profiles import export_shaders
-    shader_resources,shader_report=export_shaders(package,objects,experimental_textures)
+    shader_resources,shader_report=export_shaders(package,objects,experimental_textures,transferred)
     if embed_textures:
         from .texture_bundle import embed_dependencies
         from .materials import ArchiveTextures
@@ -780,7 +787,11 @@ def _export_file(context,destination,bone_skin_cloth,experimental_textures,embed
     for ri,raw in presets.resources.items():
         ri=record_map[ri]
         if validated.members[validated.record_members[ri]].unpacked!=raw:raise ValueError('Preset resource validation failed')
-        if validated.container.records[ri].kind==2137:validate_texture(validated.container.records[ri],raw)
+        if validated.container.records[ri].kind==2137:
+            from .materials import texture_info
+            info=texture_info(validated.container.records[ri])
+            if info['format']==0 and validated.container.records[ri].payload[-12:-4]==b'FTEXCRAW':
+                validate_texture(validated.container.records[ri],raw)
     for ri, expected in meshes.items():
         actual = validated.mesh(record_map[ri])
         if actual.pack_geometry() != expected.pack_geometry(): raise ValueError('Geometry validation failed')
@@ -796,5 +807,7 @@ def _export_file(context,destination,bone_skin_cloth,experimental_textures,embed
     context.scene['dbh_export_cloth_count']=len(cloth_report)
     context.scene['dbh_export_bone_ik_warning']=any(edit['ik_controlled'] for edit in bone_report)
     context.scene['dbh_export_recovered_bindings']=json.dumps(recovered)
+    context.scene['dbh_export_material_transfers']=json.dumps(presets.transfers.reports)
+    context.scene['dbh_export_material_transfer_count']=len(presets.transfers.reports)
     destination.write_bytes(output)
     return changed, triangles

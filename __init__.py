@@ -9,7 +9,7 @@ from .legacy import DEFAULT_INDEX
 bl_info = {
     'name': 'Detroit: Become Human DATA_CONTAINER / SEGS',
     'author': 'TheLeonX',
-    'version': (1, 0, 1), 'blender': (4, 0, 0),
+    'version': (1, 1, 0), 'blender': (4, 0, 0),
     'location': 'File > Import/Export; Material Properties > Detroit Shader Texture Slots',
     'description': 'Native mesh, animation and shader editing; experimental painted CLOTH_SIMULATION export',
     'category': 'Import-Export',
@@ -153,7 +153,8 @@ class EXPORT_SCENE_OT_dbh(bpy.types.Operator, ExportHelper):
             presets=context.scene.get('dbh_export_preset_count',0)
             bones=context.scene.get('dbh_export_bone_count',0)
             cloth=context.scene.get('dbh_export_cloth_count',0)
-            self.report({'INFO'}, f'Exported {count} edited meshes, {cloth} cloth masks, {bones} bone positions, {deleted} deletions, {presets} preset materials, {textures} textures, {embedded} bundled resources.')
+            transferred=context.scene.get('dbh_export_material_transfer_count',0)
+            self.report({'INFO'}, f'Exported {count} edited meshes, {cloth} cloth masks, {bones} bone positions, {deleted} deletions, {presets} preset materials, {transferred} transferred materials, {textures} textures, {embedded} bundled resources.')
             if context.scene.get('dbh_export_bone_ik_warning'):
                 self.report({'WARNING'}, 'Some edited bones are IK-controlled: native rest positions saved, but game animation/IK may override them.')
             return {'FINISHED'}
